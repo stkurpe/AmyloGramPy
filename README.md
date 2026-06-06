@@ -1,8 +1,18 @@
 # AmyloGram-Py
 
-Fast, testable Python reimplementation of the AmyloGram prediction path.
+Fast, testable Python reimplementation of the original R **AmyloGram** prediction
+path.
 
-The goal is exact compatibility with the original R `AmyloGram` package:
+AmyloGram-Py is designed to reproduce the predictions of the reference R
+package while making high-throughput FASTA prediction substantially faster and
+easier to run inside automated pipelines.
+
+Original AmyloGram repository: [michbur/AmyloGram](https://github.com/michbur/AmyloGram)
+
+## What AmyloGram-Py Reimplements
+
+The Python implementation follows the same prediction logic as the R reference
+path:
 
 ```text
 protein sequence
@@ -13,24 +23,93 @@ protein sequence
   -> max 6-mer amyloid probability per protein
 ```
 
-This repository is intentionally separate from the main mutant proteome
-pipeline. The R implementation remains the reference oracle while this package
-is developed and validated.
+The R implementation remains the reference oracle. AmyloGram-Py is a compatible
+Python prediction path built from exported reference fixtures and validated
+against R outputs.
 
-## Development Stages
+## What Was Changed
 
-1. Export AmyloGram reference fixtures from R.
-2. Match amino-acid cleaning and group encoding.
-3. Match 6-mer feature vectors against R/biogram fixtures.
-4. Match ranger forest probabilities against R.
-5. Precompute all `6^6 = 46656` degenerate 6-mer probabilities.
-6. Predict full FASTA files with lookup + max aggregation.
+Compared with the original R execution path, AmyloGram-Py changes the execution
+strategy, not the biological prediction target:
 
-## Quick Tests
+- Reimplemented AmyloGram amino-acid cleaning and group encoding in Python.
+- Reimplemented 6-mer feature generation to match R/biogram fixtures.
+- Exported the trained `ranger` random forest prediction path from R fixtures.
+- Precomputed all degenerate 6-mer probabilities: `6^6 = 46656` possible encoded
+  windows.
+- Added a compact binary lookup-table format for production prediction.
+- Replaced per-window forest traversal during FASTA prediction with direct array
+  lookup.
+- Added streaming FASTA prediction with rolling 6-mer encoding to avoid storing
+  all windows for each protein in memory.
+- Added Markdown and JSON run reports with input and lookup-table SHA256 hashes.
+- Added skipped-record TSV output with machine-readable skip reasons.
+- Added top-hit TSV output without requiring all predictions to remain in memory.
+- Added parity and benchmark scripts under `evidence/`.
+- Added optional pipeline integration as a third amyloidogenicity predictor.
 
-```bash
-python3 -m unittest discover -s tests -v
-```
+## Why The Outputs Are Considered Equivalent
+
+AmyloGram-Py was compared against the original R AmyloGram path on three FASTA
+samples. The validation checked both biological classification agreement and
+numeric probability agreement.
+
+### Count-Level Agreement
+
+R AmyloGram and AmyloGram-Py produced the same number of valid predictions, the
+same number of skipped records, and the same number of amyloid/non-amyloid
+predictions.
+
+| Sample | Input records | R predicted | Py predicted | R skipped | Py skipped | R amyloid | Py amyloid | R non-amyloid | Py non-amyloid | Discordant labels |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| SRR32060215 | 27980 | 27958 | 27958 | 22 | 22 | 26772 | 26772 | 1186 | 1186 | 0 |
+| SRR32060233 | 25196 | 25178 | 25178 | 18 | 18 | 24359 | 24359 | 819 | 819 | 0 |
+| SRR32060234 | 28327 | 28312 | 28312 | 15 | 15 | 27248 | 27248 | 1064 | 1064 | 0 |
+
+### Prediction-Level Agreement
+
+The shared sequence IDs had zero discordant binary labels. Probability
+agreement was also extremely close: mean absolute probability differences were
+about `5.9e-7`, and the maximum observed absolute difference was `5.06e-6`.
+These small differences are consistent with numeric/export precision differences
+between the R path and the Python lookup-table path.
+
+| Sample | Shared unique IDs | R-only unique IDs | Py-only unique IDs | Discordant labels | Mean abs prob delta | Median abs prob delta | Max abs prob delta | Near-threshold records |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| SRR32060215 | 27956 | 0 | 0 | 0 | 0.00000059 | 0.00000048 | 0.00000506 | 189 |
+| SRR32060233 | 25178 | 0 | 0 | 0 | 0.00000059 | 0.00000048 | 0.00000411 | 155 |
+| SRR32060234 | 28312 | 0 | 0 | 0 | 0.00000059 | 0.00000047 | 0.00000411 | 166 |
+
+### Skipped-Record Agreement
+
+Both implementations failed or skipped the same biological/input edge cases:
+records that were empty after amino-acid cleaning or shorter than six amino
+acids. AmyloGram-Py reports these records explicitly in a skipped TSV.
+
+| Sample | R invalid/short | Py skipped | R sequence errors | Py skipped reasons |
+|---|---:|---:|---:|---|
+| SRR32060215 | 22 | 22 | 0 | shorter_than_6: 22 |
+| SRR32060233 | 18 | 18 | 0 | shorter_than_6: 18 |
+| SRR32060234 | 15 | 15 | 0 | shorter_than_6: 15 |
+
+Together, these checks support the interpretation that AmyloGram-Py reproduces
+the R AmyloGram prediction path for the tested inputs while providing a faster
+execution backend.
+
+## Runtime Performance
+
+AmyloGram-Py was substantially faster than the R execution path in the tested
+samples.
+
+| Sample | R runtime | Py runtime | Speedup | Py records/sec |
+|---|---:|---:|---:|---:|
+| SRR32060215 | 67.62 min | 3.79 sec | 1069.5x | 7370.1 |
+| SRR32060233 | 51.11 min | 4.02 sec | 763.1x | 6265.7 |
+| SRR32060234 | 51.77 min | 3.37 sec | 922.9x | 8411.6 |
+
+The speedup comes from using a precomputed 6-mer probability table and a
+streaming rolling-code implementation instead of repeatedly traversing the
+random forest for every 6-mer window during prediction.
 
 ## Installation
 
@@ -52,6 +131,10 @@ Check the command-line entrypoint:
 amylogram-py --help
 ```
 
+The package requires Python `>=3.10`.
+
+## Local Development
+
 Install the CLI locally in editable mode:
 
 ```bash
@@ -59,8 +142,7 @@ make install-dev
 .venv/bin/amylogram-py --help
 ```
 
-The package requires Python `>=3.10`. If your system `python3` is older, pass
-an explicit interpreter and venv path:
+If your system `python3` is older, pass an explicit interpreter and venv path:
 
 ```bash
 make install-dev PYTHON=/path/to/python3.12 VENV=.venv312
@@ -75,6 +157,14 @@ make parity
 make benchmark
 make demo
 ```
+
+Run unit tests directly:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+## Reproduce R Reference Fixtures
 
 R parity fixtures can be regenerated on a machine/container with the R
 `AmyloGram`, `biogram`, `seqinr`, and `jsonlite` packages:
@@ -115,10 +205,6 @@ The lookup table is the production path: each protein is encoded into
 overlapping 6-mers, each 6-mer is resolved by array lookup, and the final
 protein probability is the maximum window probability.
 
-The CLI uses a streaming rolling-code implementation, so it does not allocate
-the full list of 6-mer windows for each protein. FASTA records are cleaned once
-by the parser and then predicted through a clean-sequence fast path.
-
 ## Predict A FASTA
 
 ```bash
@@ -148,17 +234,65 @@ predictions in memory.
 
 ## Evidence And Benchmarks
 
-Parity report:
+Generate the parity report:
 
 ```bash
 python3 evidence/run_parity_checks.py --report evidence/amylogram_parity_report.md
 ```
 
-Lookup benchmark:
+Run the lookup benchmark:
 
 ```bash
-python3 evidence/benchmark_lookup_prediction.py --count 2000 --length 300 --report evidence/lookup_benchmark.md
+python3 evidence/benchmark_lookup_prediction.py \
+  --count 2000 \
+  --length 300 \
+  --report evidence/lookup_benchmark.md
 ```
+
+## Optional Pipeline Integration
+
+AmyloGram-Py can be used as an optional third amyloidogenicity predictor in
+`run_amyloid_predictors.sh`. It is disabled by default so existing long-running
+batches keep their current behavior.
+
+Enable it explicitly:
+
+```bash
+RUN_AMYLOGRAM_PY=1 /home/codex/run_amyloid_predictors.sh --run-amylogram-py ...
+```
+
+Required server artifacts:
+
+- Docker image: `amylogram-py:local`
+- Binary lookup table: `/home/codex/amylogram-py/tests/fixtures/amylogram_sixmer_probabilities.bin`
+- Updated pipeline script: `/home/codex/run_amyloid_predictors.sh`
+
+One-sample test command:
+
+```bash
+RUN_AMYPRED=0 \
+RUN_AMYLOGRAM=0 \
+RUN_AMYLOGRAM_PY=1 \
+AMYLOGRAM_PY_IMAGE=amylogram-py:local \
+AMYLOGRAM_PY_LOOKUP=/home/codex/amylogram-py/tests/fixtures/amylogram_sixmer_probabilities.bin \
+AMYLOGRAM_PY_TOP_K=1000 \
+/home/codex/run_amyloid_predictors.sh \
+  --sample SRR32060234 \
+  --input-s3 s3://codex-test-ngsdata-calculations/prepared-bioinfo-proteome/SRR32060234/results_proteins/combine_proteome.fasta \
+  --output-s3 s3://codex-test-ngsdata-calculations/prepared-bioinfo-proteome/SRR32060234/results_amyloid_py_test \
+  --run-amylogram-py \
+  --force
+```
+
+Expected outputs include:
+
+- `amylogram_py_prediction.csv`
+- `amylogram_py_report.md`
+- `amylogram_py_report.json`
+- `amylogram_py_skipped.tsv`
+- `amylogram_py_top_hits.tsv`
+- `amyloid_combined_predictions.csv`
+- `amyloid_predictors_summary.tsv`
 
 ## Docker
 
@@ -193,8 +327,11 @@ make docker-smoke
 
 ## Release Checklist
 
-This repository is published at
-`https://github.com/stkurpe/AmyloGramPy`.
+This repository is published at:
+
+```text
+https://github.com/stkurpe/AmyloGramPy
+```
 
 Build the package artifacts:
 
@@ -216,5 +353,8 @@ python3 -m pip install --index-url https://test.pypi.org/simple/ --no-deps amylo
 python3 -m twine upload dist/*
 ```
 
-After PyPI publication, users can install the package with
-`python3 -m pip install amylogram-py`.
+After PyPI publication, users can install the package with:
+
+```bash
+python3 -m pip install amylogram-py
+```
