@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "amylogram-py"
+version = "0.1.0"
+description = "Fast Python-compatible AmyloGram predictor implementation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+authors = [
+  { name = "AmyloGram-Py contributors" }
+]
+dependencies = []
+keywords = ["amyloid", "bioinformatics", "fasta", "protein", "prediction"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Science/Research",
+  "Natural Language :: English",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "twine>=5",
+]
+
+[project.urls]
+Homepage = "https://github.com/stkurpe/AmyloGramPy"
+Repository = "https://github.com/stkurpe/AmyloGramPy"
+Issues = "https://github.com/stkurpe/AmyloGramPy/issues"
+Changelog = "https://github.com/stkurpe/AmyloGramPy/blob/main/CHANGELOG.md"
+
+[project.scripts]
+amylogram-py = "amylogram_py.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools]
+include-package-data = false

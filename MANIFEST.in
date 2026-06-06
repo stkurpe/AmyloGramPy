@@ -1,0 +1,9 @@
+include README.md
+include CHANGELOG.md
+include LICENSE
+include pyproject.toml
+include setup.py
+recursive-include tests *.py *.json *.bin
+recursive-include evidence *.md *.fasta *.csv *.tsv *.json
+recursive-include scripts *.R *.sh
+recursive-include docker *.Dockerfile Dockerfile
