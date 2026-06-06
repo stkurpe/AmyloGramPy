@@ -45,8 +45,6 @@ strategy, not the biological prediction target:
 - Added Markdown and JSON run reports with input and lookup-table SHA256 hashes.
 - Added skipped-record TSV output with machine-readable skip reasons.
 - Added top-hit TSV output without requiring all predictions to remain in memory.
-- Added parity and benchmark scripts under `evidence/`.
-- Added optional pipeline integration as a third amyloidogenicity predictor.
 
 ## Why The Outputs Are Considered Equivalent
 
